@@ -103,7 +103,14 @@ void ProtocolLogin::getCharacterList(const std::string& accountName, const std::
 		output->addByte(0);
 	}
 
-	output->addByte(size);
+	if(g_config.getBoolean(ConfigManager::ACCOUNT_MANAGER) && accountName != "1") {
+		output->addByte(size + 1);
+		output->addByte(0);
+		output->addString("Account Manager");
+	} else {
+		output->addByte(size);
+	}
+
 	for (uint8_t i = 0; i < size; i++) {
 		const std::string& character = account.characters[i];
 		if (g_config.getBoolean(ConfigManager::ONLINE_OFFLINE_CHARLIST)) {
@@ -201,14 +208,22 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 
 	std::string accountName = msg.getString();
 	if (accountName.empty()) {
-		disconnectClient("Invalid account name.", version);
-		return;
+		if(!g_config.getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+			disconnectClient("Invalid account name.", version);
+			return;
+		}
+
+		accountName = "1";
 	}
 
 	std::string password = msg.getString();
 	if (password.empty()) {
-		disconnectClient("Invalid password.", version);
-		return;
+		if(!g_config.getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+			disconnectClient("Invalid password.", version);
+			return;
+		}
+
+		password = "1";
 	}
 
 	// read authenticator token and stay logged in flag from last 128 bytes

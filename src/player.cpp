@@ -54,6 +54,10 @@ Player::Player(ProtocolGame_ptr p) :
 
 	storeInbox->setParent(this);
 	storeInbox->incrementReferenceCounter();
+
+	for(int32_t i = 0; i <= 12; i++) {
+		talkState[i] = false;
+	}
 }
 
 Player::~Player()
@@ -4628,3 +4632,350 @@ void Player::updateRegeneration()
 		condition->setParam(CONDITION_PARAM_MANATICKS, vocation->getManaGainTicks() * 1000);
 	}
 }
+
+void Player::manageAccount(const std::string &text) {
+	std::stringstream msg;
+	msg << "Account Manager: ";
+
+	bool noSwap = true;
+	switch (accountManager) {
+		case MANAGER_ACCOUNT: {
+			Account account = IOLoginData::loadAccount(managerNumber);
+			if(checkText(text, "cancel") || (checkText(text, "account") && !talkState[1])) {
+				talkState[1] = true;
+				for(int8_t i = 2; i <= 12; i++) {
+					talkState[i] = false;
+				}
+
+				msg << "Do you want to change your 'password', request a 'recovery key', add a 'character', or 'delete' a character?";
+			} else if(checkText(text, "delete") && talkState[1]) {
+				talkState[1] = false;
+				talkState[2] = true;
+				msg << "Which character would you like to delete?";
+			} else if(checkText(text, "character") && talkState[1]) {
+				if(account.characters.size() <= 15) {
+					talkState[1] = false;
+					talkState[6] = true;
+					msg << "What would you like as your character name?";
+				} else {
+					talkState[1] = true;
+					for(int8_t i = 2; i <= 12; i++) {
+						talkState[i] = false;
+					}
+
+					msg << "Your account reach the limit of 15 players, you can 'delete' a character if you want to create a new one.";
+				}
+			} else if(talkState[6]) {
+				managerString = text;
+				trimString(managerString);
+				if(managerString.length() < 4) {
+					msg << "Your name you want is too short, please select a longer name.";
+				} else if(managerString.length() > 20) {
+					msg << "The name you want is too long, please select a shorter name.";
+				} else if(!isValidName(managerString)) {
+					msg << "That name seems to contain invalid symbols, please choose another name.";
+				} else if(IOLoginData::playerExists(managerString)) {
+					msg << "A player with that name already exists, please choose another name.";
+				} else {
+					std::string tmp = asLowerCaseString(managerString);
+					if(tmp.substr(0, 4) != "god " && tmp.substr(0, 3) != "cm " && tmp.substr(0, 3) != "gm ") {
+						talkState[6] = false;
+						talkState[7] = true;
+						msg << managerString << ", are you sure?";
+					} else {
+						msg << "Your character is not a staff member, please tell me another name!";
+					}
+				}
+			} else if(checkText(text, "no") && talkState[7]) {
+				talkState[6] = true;
+				talkState[7] = false;
+				msg << "What else would you like to name your character?";
+			} else if(checkText(text, "yes") && talkState[7]) {
+				talkState[7] = false;
+				talkState[8] = true;
+				msg << "Should your character be a 'male' or a 'female'.";
+			} else if(talkState[8] && (checkText(text, "female") || checkText(text, "male"))) {
+				talkState[8] = false;
+				talkState[9] = true;
+				if(checkText(text, "female")) {
+					msg << "A female, are you sure?";
+					managerSex = PLAYERSEX_FEMALE;
+				} else {
+					msg << "A male, are you sure?";
+					managerSex = PLAYERSEX_MALE;
+				}
+			} else if(checkText(text, "no") && talkState[9]) {
+				talkState[8] = true;
+				talkState[9] = false;
+				msg << "Tell me... would you like to be a 'male' or a 'female'?";
+			} else if(checkText(text, "yes") && talkState[9]) {
+				if(g_config.getBoolean(ConfigManager::START_CHOOSEVOC)) {
+					talkState[9] = false;
+					talkState[11] = true;
+
+					bool firstPart = true;
+					for(auto it = g_vocations.getFirstVocation(); it != g_vocations.getLastVocation(); ++it) {
+						if(it->first == it->second.getFromVocation() && it->first != 0) {
+							if(firstPart) {
+								msg << "What do you want to be... " << it->second.getVocDescription();
+								firstPart = false;
+							} else if(it->first - 1 != 0) {
+								msg << ", " << it->second.getVocDescription();
+							} else {
+								msg << " or " << it->second.getVocDescription();
+							}
+						}
+					}
+
+					msg << "?";
+				} else if(g_config.getBoolean(ConfigManager::START_CHOOSETOWN)) {
+					talkState[9] = false;
+					talkState[13] = true;
+
+					bool firstPart = true;
+					for(TownMap::const_iterator it =  g_game.map.towns.getFirstTown(); it !=  g_game.map.towns.getLastTown(); ++it) {
+						if(it->second->getID() < 100) {
+							if(firstPart) {
+								msg << "Where do you want to live... " << it->second->getName();
+								firstPart = false;
+							} else if(it->first - 1 != 0) {
+								msg << ", " << it->second->getName();
+							} else {
+								msg << " or " << it->second->getName() << ".";
+							}
+						}
+					}
+				} else if(!IOLoginData::playerExists(managerString)) {
+					talkState[1] = true;
+					for(int8_t i = 2; i <= 12; i++) {
+						talkState[i] = false;
+					}
+
+					if(IOLoginData::createCharacter(managerNumber, managerString, managerNumber2, (uint16_t)managerSex)) {
+						msg << "Your character has been created.";
+					} else {
+						msg << "Your character couldn't be created, please try again.";
+					}
+				} else {
+					talkState[6] = true;
+					talkState[9] = false;
+					msg << "A player with that name already exists, please choose another name.";
+				}
+			} else if(talkState[11]) {
+				for(auto it = g_vocations.getFirstVocation(); it != g_vocations.getLastVocation(); ++it) {
+					std::string tmp = asLowerCaseString(it->second.getVocName());
+					if(checkText(text, tmp) && it != g_vocations.getLastVocation() && it->first == it->second.getFromVocation() && it->first != 0) {
+						msg << "So you would like to be " << it->second.getVocDescription() << "... are you sure?";
+						managerNumber2 = it->first;
+						talkState[11] = false;
+						talkState[12] = true;
+					}
+				}
+
+				if(msg.str().length() == 17) {
+					msg << "I don't understand what vocation you would like to be... could you please repeat it?";
+				}
+			} else if(checkText(text, "yes") && talkState[12]) {
+				if(g_config.getBoolean(ConfigManager::START_CHOOSETOWN)) {
+					talkState[12] = false;
+					talkState[13] = true;
+
+					bool firstPart = true;
+					for(TownMap::const_iterator it =  g_game.map.towns.getFirstTown(); it !=  g_game.map.towns.getLastTown(); ++it) {
+						if(it->second->getID() < 100) {
+							if(firstPart) {
+								msg << "Where do you want to live... " << it->second->getName();
+								firstPart = false;
+							} else if(it->first - 1 != 0) {
+								msg << ", " << it->second->getName();
+							} else {
+								msg << " or " << it->second->getName() << ".";
+							}
+						}
+					}
+				} else if(!IOLoginData::playerExists(managerString)) {
+					talkState[1] = true;
+					for(int8_t i = 2; i <= 12; i++) {
+						talkState[i] = false;
+					}
+
+					if(IOLoginData::createCharacter(managerNumber, managerString, managerNumber2, (uint16_t)managerSex)) {
+						msg << "Your character has been created.";
+					} else {
+						msg << "Your character couldn't be created, please try again.";
+					}
+				} else {
+					talkState[6] = true;
+					talkState[9] = false;
+					msg << "A player with that name already exists, please choose another name.";
+				}
+			}
+			else if(checkText(text, "no") && talkState[12]) {
+				talkState[11] = true;
+				talkState[12] = false;
+				msg << "No? Then what would you like to be?";
+			} else if(talkState[13]) {
+				for(TownMap::const_iterator it =  g_game.map.towns.getFirstTown(); it !=  g_game.map.towns.getLastTown(); ++it) {
+					std::string tmp = asLowerCaseString(it->second->getName());
+					if(checkText(text, tmp) && it != g_game.map.towns.getLastTown() && it->second->getID() < 100) {
+						msg << "So do you want to live in " << it->second->getName() << ".. are you sure?";
+						managerNumber3 = it->first;
+						talkState[13] = false;
+						talkState[14] = true;
+					}
+				}
+
+				if(msg.str().length() == 17) {
+					msg << "I don't understand where you would like to live... could you please repeat it?";
+				}
+			} else if(checkText(text, "yes") && talkState[14]) {
+				if(!IOLoginData::playerExists(managerString)) {
+					talkState[1] = true;
+					for(int8_t i = 2; i <= 14; i++) {
+						talkState[i] = false;
+					}
+
+					if(IOLoginData::createCharacter(managerNumber, managerString, managerNumber2, (uint16_t)managerSex)) {
+						msg << "Your character has been created.";
+					} else {
+						msg << "Your character couldn't be created, please try again.";
+					}
+				} else {
+					talkState[6] = true;
+					talkState[9] = false;
+					msg << "A player with that name already exists, please choose another name.";
+				}
+			} else if(checkText(text, "no") && talkState[14]) {
+				talkState[13] = true;
+				talkState[14] = false;
+				msg << "So where do you want to live?";
+			} else {
+				msg << "Please read the latest message that I have specified, I don't understand the current requested action.";
+			}
+
+			break;
+		}
+		case MANAGER_NEW: {
+			if(checkText(text, "account") && !talkState[1]) {
+				msg << "What would you like your password to be?";
+				talkState[1] = true;
+				talkState[2] = true;
+			} else if(talkState[2]) {
+				std::string tmp = text;
+				trimString(tmp);
+				if(tmp.length() < 6) {
+					msg << "That password is too short, at least 6 digits are required. Please select a longer password.";
+				} else if(!isValidPassword(tmp)) {
+					msg << "Your password contains invalid characters... please tell me another one.";
+				} else {
+					talkState[3] = true;
+					talkState[2] = false;
+					managerString = tmp;
+					msg << managerString << " is it? 'yes' or 'no'?";
+				}
+			} else if(checkText(text, "yes") && talkState[3]) {
+				if(g_config.getBoolean(ConfigManager::GENERATE_ACCOUNT_NUMBER)) {
+					do {
+						sprintf(managerChar, "%d%d%d%d%d%d%d", random_range(2, 9), random_range(2, 9), random_range(2, 9), random_range(2, 9), random_range(2, 9), random_range(2, 9), random_range(2, 9));
+					} while(IOLoginData::accountNameExists(managerChar));
+
+					uint32_t id = (uint32_t)IOLoginData::createAccount(managerChar, managerString);
+					if(id) {
+						accountManager = MANAGER_ACCOUNT;
+						managerNumber = id;
+
+						noSwap = talkState[1] = false;
+						msg << "Your account has been created, you may manage it now, but remember your account name: '"
+							<< managerChar << "' and password: '" << managerString
+							<< "'! If the account name is too hard to remember, please note it somewhere.";
+					} else {
+						msg << "Your account could not be created, please try again.";
+					}
+
+					for(int8_t i = 2; i <= 5; i++) {
+						talkState[i] = false;
+					}
+				}
+				else {
+					msg << "What would you like your account name to be?";
+					talkState[3] = false;
+					talkState[4] = true;
+				}
+			} else if(checkText(text, "no") && talkState[3]) {
+				talkState[2] = true;
+				talkState[3] = false;
+				msg << "What would you like your password to be then?";
+			} else if(talkState[4]) {
+				std::string tmp = text;
+				trimString(tmp);
+				if(tmp.length() < 3) {
+					msg << "That account name is too short, at least 3 digits are required. Please select a longer account name.";
+				} else if(tmp.length() > 25) {
+					msg << "That account name is too long, not more than 25 digits are required. Please select a shorter account name.";
+				} else if(!isValidAccountName(tmp)) {
+					msg << "Your account name contains invalid characters, please choose another one.";
+				} else if(asLowerCaseString(tmp) == asLowerCaseString(managerString)) {
+					msg << "Your account name cannot be same as password, please choose another one.";
+				} else {
+					sprintf(managerChar, "%s", tmp.c_str());
+					msg << managerChar << ", are you sure?";
+					talkState[4] = false;
+					talkState[5] = true;
+				}
+			} else if(checkText(text, "yes") && talkState[5]) {
+				if(!IOLoginData::accountNameExists(managerChar)) {
+					uint32_t id = (uint32_t)IOLoginData::createAccount(managerChar, managerString);
+					if(id) {
+						accountManager = MANAGER_ACCOUNT;
+						managerNumber = id;
+
+						noSwap = talkState[1] = false;
+						msg << "Your account has been created, you may manage it now, but remember your account name: '"
+							<< managerChar << "' and password: '" << managerString << "'!";
+					} else {
+						msg << "Your account could not be created, please try again.";
+					}
+
+					for(int8_t i = 2; i <= 5; i++) {
+						talkState[i] = false;
+					}
+				} else {
+					msg << "An account with that name already exists, please try another account name.";
+					talkState[4] = true;
+					talkState[5] = false;
+				}
+			} else if(checkText(text, "no") && talkState[5]) {
+				talkState[5] = false;
+				talkState[4] = true;
+				msg << "What else would you like as your account name?";
+			} else if(checkText(text, "recover") && !talkState[6]) {
+				talkState[6] = true;
+				talkState[7] = true;
+				msg << "What was your account name?";
+			} else if(talkState[7]) {
+				managerString = text;
+				if(IOLoginData::getAccountId(managerString, (uint32_t&)managerNumber)) {
+					talkState[7] = false;
+					talkState[8] = true;
+					msg << "What was your recovery key?";
+				} else {
+					msg << "Sorry, but account with such name doesn't exists.";
+					talkState[6] = talkState[7] = false;
+				}
+			// falta o step 8 aqui
+			} else {
+				msg << "Sorry, but I can't understand you, please try to repeat that.";
+			}
+
+			break;
+		}
+
+		default: return; break;
+	}
+
+	sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+	if(!noSwap) {
+		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "Hint: type 'account' to manage your account. If you would like to start over, type 'cancel' anywhere.");
+	}
+}
+

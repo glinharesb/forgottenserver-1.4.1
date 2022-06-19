@@ -59,6 +59,13 @@ class IOLoginData
 
 		static void updatePremiumTime(uint32_t accountId, time_t endTime);
 
+		static bool accountNameExists(const std::string& name);
+		static uint64_t createAccount(std::string name, std::string password);
+		static bool getAccountId(const std::string& name, uint32_t& number);
+		static bool playerExists(uint32_t guid);
+		static bool playerExists(std::string& name);
+		static bool createCharacter(uint32_t accountId, std::string characterName, int32_t vocationId, uint16_t sex);
+
 	private:
 		using ItemMap = std::map<uint32_t, std::pair<Item*, uint32_t>>;
 

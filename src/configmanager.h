@@ -69,6 +69,12 @@ class ConfigManager
 			REMOVE_ON_DESPAWN,
 			PLAYER_CONSOLE_LOGS,
 
+			ACCOUNT_MANAGER,
+			NAMELOCK_MANAGER,
+			START_CHOOSEVOC,
+			START_CHOOSETOWN,
+			GENERATE_ACCOUNT_NUMBER,
+
 			LAST_BOOLEAN_CONFIG /* this must be the last one */
 		};
 
@@ -134,6 +140,10 @@ class ConfigManager
 			VIP_PREMIUM_LIMIT,
 			DEPOT_FREE_LIMIT,
 			DEPOT_PREMIUM_LIMIT,
+
+			DEFAULT_TOWN_ID,
+			START_LEVEL,
+			START_MAGICLEVEL,
 
 			LAST_INTEGER_CONFIG /* this must be the last one */
 		};

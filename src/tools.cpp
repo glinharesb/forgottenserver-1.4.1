@@ -464,7 +464,7 @@ Direction getDirectionTo(const Position& from, const Position& to)
 	if (from == to) {
 		return DIRECTION_NONE;
 	}
-	
+
 	Direction dir;
 
 	int32_t x_offset = Position::getOffsetX(from, to);
@@ -1265,4 +1265,174 @@ SpellGroup_t stringToSpellGroup(const std::string& value)
 	}
 
 	return SPELLGROUP_NONE;
+}
+
+bool checkText(std::string text, std::string str) {
+	trimString(text);
+	return asLowerCaseString(text) == str;
+}
+
+bool isUppercaseLetter(char character) {
+	return (character >= 65 && character <= 90);
+}
+
+bool isLowercaseLetter(char character) {
+	return (character >= 97 && character <= 122);
+}
+
+bool isPasswordCharacter(char character) {
+	return ((character >= 33 && character <= 47) || (character >= 58 && character <= 64) || (character >= 91 && character <= 96) || (character >= 123 && character <= 126));
+}
+
+bool isNumber(char character) {
+	return (character >= 48 && character <= 57);
+}
+
+bool isValidName(std::string text, bool forceUppercaseOnFirstLetter/* = true*/)
+{
+	uint32_t textLength = text.length(), lenBeforeSpace = 1, lenBeforeQuote = 1, lenBeforeDash = 1, repeatedCharacter = 0;
+	char lastChar = 32;
+	if(forceUppercaseOnFirstLetter)
+	{
+		if(!isUppercaseLetter(text[0]))
+			return false;
+	}
+	else if(!isLowercaseLetter(text[0]) && !isUppercaseLetter(text[0]))
+		return false;
+
+	for(uint32_t size = 1; size < textLength; size++)
+	{
+		if(text[size] != 32)
+		{
+			lenBeforeSpace++;
+			if(text[size] != 39)
+				lenBeforeQuote++;
+			else
+			{
+				if(lenBeforeQuote <= 1 || size == textLength - 1 || text[size + 1] == 32)
+					return false;
+
+				lenBeforeQuote = 0;
+			}
+
+			if(text[size] != 45)
+				lenBeforeDash++;
+			else
+			{
+				if(lenBeforeDash <= 1 || size == textLength - 1 || text[size + 1] == 32)
+					return false;
+
+				lenBeforeDash = 0;
+			}
+
+			if(text[size] == lastChar)
+			{
+				repeatedCharacter++;
+				if(repeatedCharacter > 2)
+					return false;
+			}
+			else
+				repeatedCharacter = 0;
+
+			lastChar = text[size];
+		}
+		else
+		{
+			if(lenBeforeSpace <= 1 || size == textLength - 1 || text[size + 1] == 32)
+				return false;
+
+			lenBeforeSpace = lenBeforeQuote = lenBeforeDash = 0;
+		}
+
+		if(!(isLowercaseLetter(text[size]) || text[size] == 32 || text[size] == 39 || text[size] == 45
+			|| (isUppercaseLetter(text[size]) && text[size - 1] == 32)))
+			return false;
+	}
+
+	return true;
+}
+
+bool isValidPassword(std::string text) {
+	toLowerCaseString(text);
+
+	uint32_t textLength = text.length();
+	for(uint32_t size = 0; size < textLength; size++) {
+		if(!isLowercaseLetter(text[size]) && !isNumber(text[size]) && !isPasswordCharacter(text[size])) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool isValidAccountName(std::string text) {
+	toLowerCaseString(text);
+
+	uint32_t textLength = text.length();
+	for(uint32_t size = 0; size < textLength; size++){
+		if(!isLowercaseLetter(text[size]) && !isNumber(text[size])) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+uint32_t rand24b() {
+	return ((rand() << 12) ^ (rand())) & (0xFFFFFF);
+}
+
+float box_muller(float m, float s) {
+	// normal random variate generator
+	// mean m, standard deviation s
+	float x1, x2, w, y1;
+	static float y2;
+
+	static bool useLast = false;
+	if(useLast) // use value from previous call
+	{
+		y1 = y2;
+		useLast = false;
+		return (m + y1 * s);
+	}
+
+	do
+	{
+		double r1 = (((float)(rand()) / RAND_MAX));
+		double r2 = (((float)(rand()) / RAND_MAX));
+
+		x1 = 2.0 * r1 - 1.0;
+		x2 = 2.0 * r2 - 1.0;
+		w = x1 * x1 + x2 * x2;
+	}
+	while(w >= 1.0);
+	w = sqrt((-2.0 * log(w)) / w);
+
+	y1 = x1 * w;
+	y2 = x2 * w;
+
+	useLast = true;
+	return (m + y1 * s);
+}
+
+int32_t random_range(int32_t lowestNumber, int32_t highestNumber, DistributionType_t type /*= DISTRO_UNIFORM*/)
+{
+	if(highestNumber == lowestNumber)
+		return lowestNumber;
+
+	if(lowestNumber > highestNumber)
+		std::swap(lowestNumber, highestNumber);
+
+	switch(type)
+	{
+		case DISTRO_UNIFORM:
+			return (lowestNumber + ((int32_t)rand24b() % (highestNumber - lowestNumber + 1)));
+		case DISTRO_NORMAL:
+			return (lowestNumber + int32_t(float(highestNumber - lowestNumber) * (float)std::min((float)1, std::max((float)0, box_muller(0.5, 0.25)))));
+		default:
+			break;
+	}
+
+	const float randMax = 16777216;
+	return (lowestNumber + int32_t(float(highestNumber - lowestNumber) * float(1.f - sqrt((1.f * rand24b()) / randMax))));
 }

@@ -247,6 +247,11 @@ bool ConfigManager::load()
 	boolean[ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS] = getGlobalBoolean(L, "onlyInvitedCanMoveHouseItems", true);
 	boolean[REMOVE_ON_DESPAWN] = getGlobalBoolean(L, "removeOnDespawn", true);
 	boolean[PLAYER_CONSOLE_LOGS] = getGlobalBoolean(L, "showPlayerLogInConsole", true);
+	boolean[ACCOUNT_MANAGER] = getGlobalBoolean(L, "accountManager", true);
+	boolean[NAMELOCK_MANAGER] = getGlobalBoolean(L, "namelockManager", false);
+	boolean[START_CHOOSEVOC] = getGlobalBoolean(L, "newPlayerChooseVoc", false);
+	boolean[START_CHOOSETOWN]= getGlobalBoolean(L, "newPlayerChooseTown", false);
+	boolean[GENERATE_ACCOUNT_NUMBER] = getGlobalBoolean(L, "generateAccountNumber", true);
 
 	string[DEFAULT_PRIORITY] = getGlobalString(L, "defaultPriority", "high");
 	string[SERVER_NAME] = getGlobalString(L, "serverName", "");
@@ -290,6 +295,9 @@ bool ConfigManager::load()
 	integer[VIP_PREMIUM_LIMIT] = getGlobalNumber(L, "vipPremiumLimit", 100);
 	integer[DEPOT_FREE_LIMIT] = getGlobalNumber(L, "depotFreeLimit", 2000);
 	integer[DEPOT_PREMIUM_LIMIT] = getGlobalNumber(L, "depotPremiumLimit", 10000);
+	integer[DEFAULT_TOWN_ID]= getGlobalNumber(L, "newPlayerDefaultTownId", 1);
+	integer[START_LEVEL] = getGlobalNumber(L, "newPlayerLevel", 1);
+	integer[START_MAGICLEVEL] = getGlobalNumber(L, "newPlayerMagicLevel", 0);
 
 	expStages = loadXMLStages();
 	if (expStages.empty()) {
