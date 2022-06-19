@@ -178,7 +178,6 @@ void ProtocolGame::login(const std::string& name, uint32_t accountId, OperatingS
 			if(accountId != 1) {
 				player->accountManager = MANAGER_ACCOUNT;
 				player->managerNumber = accountId;
-				// std::cout << "player->managerNumber: " << player->getAccount << std::endl;
 			} else {
 				player->accountManager = MANAGER_NEW;
 			}

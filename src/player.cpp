@@ -4741,10 +4741,12 @@ void Player::manageAccount(const std::string &text) {
 							} else if(it->first - 1 != 0) {
 								msg << ", " << it->second->getName();
 							} else {
-								msg << " or " << it->second->getName() << ".";
+								msg << " or " << it->second->getName();
 							}
 						}
 					}
+
+					msg << "?";
 				} else if(!IOLoginData::playerExists(managerString)) {
 					talkState[1] = true;
 					for(int8_t i = 2; i <= 12; i++) {
@@ -4793,6 +4795,8 @@ void Player::manageAccount(const std::string &text) {
 							}
 						}
 					}
+
+					msg << "?";
 				} else if(!IOLoginData::playerExists(managerString)) {
 					talkState[1] = true;
 					for(int8_t i = 2; i <= 12; i++) {
