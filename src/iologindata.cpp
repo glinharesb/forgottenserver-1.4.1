@@ -27,6 +27,7 @@
 
 extern ConfigManager g_config;
 extern Game g_game;
+extern Vocations g_vocations;
 
 Account IOLoginData::loadAccount(uint32_t accno)
 {
@@ -969,4 +970,112 @@ void IOLoginData::removeVIPEntry(uint32_t accountId, uint32_t guid)
 void IOLoginData::updatePremiumTime(uint32_t accountId, time_t endTime)
 {
 	Database::getInstance().executeQuery(fmt::format("UPDATE `accounts` SET `premium_ends_at` = {:d} WHERE `id` = {:d}", endTime, accountId));
+}
+
+bool IOLoginData::accountNameExists(const std::string& name) {
+	Database& db = Database::getInstance();
+
+	DBResult_ptr result = db.storeQuery(fmt::format("SELECT 1 FROM `accounts` WHERE `name` = {:s}", db.escapeString(name)));
+	if (!result) {
+		return false;
+	}
+
+	return true;
+}
+
+uint64_t IOLoginData::createAccount(std::string name, std::string password) {
+	password = transformToSHA1(password);
+
+	Database& db = Database::getInstance();
+
+	std::string query = fmt::format("INSERT INTO `accounts` (`id`, `name`, `password`) VALUES (NULL, {:s}, {:s})", db.escapeString(name), db.escapeString(password));
+	if(!db.executeQuery(query)) {
+		return false;
+	}
+
+	return db.getLastInsertId();
+}
+
+bool IOLoginData::getAccountId(const std::string& name, uint32_t& number) {
+	if(!name.length()) {
+		return false;
+	}
+
+	Database& db = Database::getInstance();
+
+	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id` FROM `accounts` WHERE `name` = {:s} LIMIT 1", db.escapeString(name)));
+	if (!result) {
+		return false;
+	}
+
+	number = result->getNumber<uint32_t>("id");
+	return true;
+}
+
+bool IOLoginData::playerExists(uint32_t guid) {
+	Database& db = Database::getInstance();
+
+	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `name` FROM `players` WHERE `id` = {:d} AND `deletion` = 0 LIMIT 1", guid));
+	if (!result) {
+		return false;
+	}
+
+	return true;
+}
+
+bool IOLoginData::playerExists(std::string& name) {
+	Database& db = Database::getInstance();
+
+	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id`, `name` FROM `players` WHERE `name` = {:s} AND `deletion` = 0 LIMIT 1", db.escapeString(name)));
+	if (!result) {
+		return false;
+	}
+
+	return true;
+}
+
+bool IOLoginData::createCharacter(uint32_t accountId, std::string characterName, int32_t vocationId, uint16_t sex, uint32_t townId) {
+	if(playerExists(characterName)) {
+		return false;
+	}
+
+	Vocation* vocation = g_vocations.getVocation(vocationId);
+	Vocation* rookVoc = g_vocations.getVocation(0);
+
+	Town* town = g_game.map.towns.getTown(townId);
+
+	uint16_t healthMax = 150, manaMax = 0, capMax = 400, lookType = 136;
+	if(sex % 2) {
+		lookType = 128;
+	}
+
+	uint32_t level = g_config.getNumber(ConfigManager::START_LEVEL), tmpLevel = std::min((uint32_t)7, (level - 1));
+	uint64_t exp = 0;
+	if(level > 1) {
+		exp = Player::getExpForLevel(level);
+	}
+
+	if(tmpLevel > 0) {
+		healthMax += rookVoc->getHPGain() * tmpLevel;
+		manaMax += rookVoc->getManaGain() * tmpLevel;
+		capMax += rookVoc->getCapGain() * tmpLevel;
+
+		if(level > 8) {
+			tmpLevel = level - 8;
+			healthMax += vocation->getHPGain() * tmpLevel;
+			manaMax += vocation->getManaGain() * tmpLevel;
+			capMax += vocation->getCapGain() * tmpLevel;
+		}
+	}
+
+	Database& db = Database::getInstance();
+	std::ostringstream query;
+
+	query << "INSERT INTO `players` (`id`, `name`, `account_id`, `level`, `vocation`, `health`, `healthmax`, `lookType`, `mana`, `manamax`, `conditions`, `town_id`, `cap`, `sex`) VALUES (NULL, " << db.escapeString(characterName) << ", " << accountId << ", " << level << ", " << vocationId << ", " << healthMax << ", " << healthMax << ", " << lookType << ", " << manaMax << ", " << manaMax << ", 0x0, " << townId << ", " << capMax << ", " << sex << ")";
+
+	if(!db.executeQuery(query.str())) {
+		return false;
+	}
+
+	return true;
 }

@@ -1,3 +1,13 @@
+-- Account manager
+accountManager = true
+namelockManager = true
+newPlayerChooseVoc = true
+newPlayerChooseTown = false
+newPlayerDefaultTownId = 1
+newPlayerLevel = 1
+newPlayerMagicLevel = 0
+generateAccountNumber = false
+
 -- Combat settings
 -- NOTE: valid values for worldType are: "pvp", "no-pvp" and "pvp-enforced"
 worldType = "pvp"

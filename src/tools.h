@@ -96,4 +96,23 @@ int64_t OTSYS_TIME();
 
 SpellGroup_t stringToSpellGroup(const std::string& value);
 
+bool checkText(std::string text, std::string str);
+bool isUppercaseLetter(char character);
+bool isLowercaseLetter(char character);
+bool isPasswordCharacter(char character);
+bool isNumber(char character);
+bool isValidName(std::string text, bool forceUppercaseOnFirstLetter = true);
+bool isValidPassword(std::string text);
+bool isValidAccountName(std::string text);
+
+enum DistributionType_t {
+	DISTRO_UNIFORM,
+	DISTRO_SQUARE,
+	DISTRO_NORMAL
+};
+
+uint32_t rand24b();
+float box_muller(float m, float s);
+int32_t random_range(int32_t lowest_number, int32_t highest_number, DistributionType_t type = DISTRO_UNIFORM);
+
 #endif

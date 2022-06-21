@@ -77,6 +77,13 @@ enum tradestate_t : uint8_t {
 	TRADE_TRANSFER,
 };
 
+enum AccountManager_t : uint8_t {
+	MANAGER_NONE,
+	MANAGER_NEW,
+	MANAGER_ACCOUNT,
+	MANAGER_NAMELOCK
+};
+
 struct VIPEntry {
 	VIPEntry(uint32_t guid, std::string name, std::string description, uint32_t icon, bool notify) :
 		guid(guid), name(std::move(name)), description(std::move(description)), icon(icon), notify(notify) {}
@@ -1162,7 +1169,18 @@ class Player final : public Creature, public Cylinder
 
 		void updateRegeneration();
 
+		bool isAccountManager() const {
+			return (accountManager != MANAGER_NONE);
+		}
+
+		void manageAccount(const std::string& text);
+
 	private:
+		bool talkState[15];
+		std::string managerString, managerString2;
+		PlayerSex_t managerSex;
+		char managerChar[100];
+
 		std::forward_list<Condition*> getMuteConditions() const;
 
 		void checkTradeState(const Item* item);
@@ -1316,6 +1334,9 @@ class Player final : public Creature, public Cylinder
 		tradestate_t tradeState = TRADE_NONE;
 		fightMode_t fightMode = FIGHTMODE_ATTACK;
 		AccountType_t accountType = ACCOUNT_TYPE_NORMAL;
+
+		AccountManager_t accountManager;
+		int32_t managerNumber, managerNumber2, managerNumber3;
 
 		bool chaseMode = false;
 		bool secureMode = false;

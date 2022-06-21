@@ -157,7 +157,7 @@ void ProtocolGame::login(const std::string& name, uint32_t accountId, OperatingS
 {
 	//dispatcher thread
 	Player* foundPlayer = g_game.getPlayerByName(name);
-	if (!foundPlayer || g_config.getBoolean(ConfigManager::ALLOW_CLONES)) {
+	if (!foundPlayer || g_config.getBoolean(ConfigManager::ALLOW_CLONES) || name == "Account Manager") {
 		player = new Player(getThis());
 		player->setName(name);
 
@@ -174,6 +174,26 @@ void ProtocolGame::login(const std::string& name, uint32_t accountId, OperatingS
 			return;
 		}
 
+		/*if(IOBan::isPlayerBanished(player->getGUID(), PLAYERBAN_LOCK) && accountId != 1) {
+			if(g_config.getBoolean(ConfigManager::NAMELOCK_MANAGER)) {
+				player->name = "Account Manager";
+				player->accountManager = MANAGER_NAMELOCK;
+
+				player->managerNumber = accountId;
+				player->managerString2 = name;
+			} else {
+				disconnectClient("Your character has been namelocked.");
+				return;
+			}
+		} else*/ if(player->getName() == "Account Manager" && g_config.getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+			if(accountId != 1) {
+				player->accountManager = MANAGER_ACCOUNT;
+				player->managerNumber = accountId;
+			} else {
+				player->accountManager = MANAGER_NEW;
+			}
+		}
+
 		if (g_game.getGameState() == GAME_STATE_CLOSING && !player->hasFlag(PlayerFlag_CanAlwaysLogin)) {
 			disconnectClient("The game is just going down.\nPlease try again later.");
 			return;
@@ -184,7 +204,7 @@ void ProtocolGame::login(const std::string& name, uint32_t accountId, OperatingS
 			return;
 		}
 
-		if (g_config.getBoolean(ConfigManager::ONE_PLAYER_ON_ACCOUNT) && player->getAccountType() < ACCOUNT_TYPE_GAMEMASTER && g_game.getPlayerByAccount(player->getAccount())) {
+		if (g_config.getBoolean(ConfigManager::ONE_PLAYER_ON_ACCOUNT) && player->getAccountType() < ACCOUNT_TYPE_GAMEMASTER && g_game.getPlayerByAccount(player->getAccount()) && !player->isAccountManager()) {
 			disconnectClient("You may only login with one character\nof your account at the same time.");
 			return;
 		}
@@ -383,8 +403,13 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	}
 
 	if (accountName.empty()) {
-		disconnectClient("You must enter your account name.");
-		return;
+		if(!g_config.getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+			disconnectClient("You must enter your account name.");
+			return;
+		}
+
+		accountName = "1";
+		password = "1";
 	}
 
 	std::string characterName = msg.getString();
@@ -422,6 +447,11 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	}
 
 	uint32_t accountId = IOLoginData::gameworldAuthentication(accountName, password, characterName, token, tokenTime);
+
+	if(characterName == "Account Manager" && g_config.getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+		IOLoginData::getAccountId(accountName, accountId);
+	}
+
 	if (accountId == 0) {
 		disconnectClient("Account name or password is not correct.");
 		return;
@@ -501,93 +531,108 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		}
 	}
 
-	switch (recvbyte) {
-		case 0x14: g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::logout, getThis(), true, false))); break;
-		case 0x1D: addGameTask(&Game::playerReceivePingBack, player->getID()); break;
-		case 0x1E: addGameTask(&Game::playerReceivePing, player->getID()); break;
-		case 0x32: parseExtendedOpcode(msg); break; //otclient extended opcode
-		case 0x64: parseAutoWalk(msg); break;
-		case 0x65: addGameTask(&Game::playerMove, player->getID(), DIRECTION_NORTH); break;
-		case 0x66: addGameTask(&Game::playerMove, player->getID(), DIRECTION_EAST); break;
-		case 0x67: addGameTask(&Game::playerMove, player->getID(), DIRECTION_SOUTH); break;
-		case 0x68: addGameTask(&Game::playerMove, player->getID(), DIRECTION_WEST); break;
-		case 0x69: addGameTask(&Game::playerStopAutoWalk, player->getID()); break;
-		case 0x6A: addGameTask(&Game::playerMove, player->getID(), DIRECTION_NORTHEAST); break;
-		case 0x6B: addGameTask(&Game::playerMove, player->getID(), DIRECTION_SOUTHEAST); break;
-		case 0x6C: addGameTask(&Game::playerMove, player->getID(), DIRECTION_SOUTHWEST); break;
-		case 0x6D: addGameTask(&Game::playerMove, player->getID(), DIRECTION_NORTHWEST); break;
-		case 0x6F: addGameTaskTimed(DISPATCHER_TASK_EXPIRATION, &Game::playerTurn, player->getID(), DIRECTION_NORTH); break;
-		case 0x70: addGameTaskTimed(DISPATCHER_TASK_EXPIRATION, &Game::playerTurn, player->getID(), DIRECTION_EAST); break;
-		case 0x71: addGameTaskTimed(DISPATCHER_TASK_EXPIRATION, &Game::playerTurn, player->getID(), DIRECTION_SOUTH); break;
-		case 0x72: addGameTaskTimed(DISPATCHER_TASK_EXPIRATION, &Game::playerTurn, player->getID(), DIRECTION_WEST); break;
-		case 0x77: parseEquipObject(msg); break;
-		case 0x78: parseThrow(msg); break;
-		case 0x79: parseLookInShop(msg); break;
-		case 0x7A: parsePlayerPurchase(msg); break;
-		case 0x7B: parsePlayerSale(msg); break;
-		case 0x7C: addGameTask(&Game::playerCloseShop, player->getID()); break;
-		case 0x7D: parseRequestTrade(msg); break;
-		case 0x7E: parseLookInTrade(msg); break;
-		case 0x7F: addGameTask(&Game::playerAcceptTrade, player->getID()); break;
-		case 0x80: addGameTask(&Game::playerCloseTrade, player->getID()); break;
-		case 0x82: parseUseItem(msg); break;
-		case 0x83: parseUseItemEx(msg); break;
-		case 0x84: parseUseWithCreature(msg); break;
-		case 0x85: parseRotateItem(msg); break;
-		case 0x87: parseCloseContainer(msg); break;
-		case 0x88: parseUpArrowContainer(msg); break;
-		case 0x89: parseTextWindow(msg); break;
-		case 0x8A: parseHouseWindow(msg); break;
-		case 0x8B: parseWrapItem(msg); break;
-		case 0x8C: parseLookAt(msg); break;
-		case 0x8D: parseLookInBattleList(msg); break;
-		case 0x8E: /* join aggression */ break;
-		case 0x96: parseSay(msg); break;
-		case 0x97: addGameTask(&Game::playerRequestChannels, player->getID()); break;
-		case 0x98: parseOpenChannel(msg); break;
-		case 0x99: parseCloseChannel(msg); break;
-		case 0x9A: parseOpenPrivateChannel(msg); break;
-		case 0x9E: addGameTask(&Game::playerCloseNpcChannel, player->getID()); break;
-		case 0xA0: parseFightModes(msg); break;
-		case 0xA1: parseAttack(msg); break;
-		case 0xA2: parseFollow(msg); break;
-		case 0xA3: parseInviteToParty(msg); break;
-		case 0xA4: parseJoinParty(msg); break;
-		case 0xA5: parseRevokePartyInvite(msg); break;
-		case 0xA6: parsePassPartyLeadership(msg); break;
-		case 0xA7: addGameTask(&Game::playerLeaveParty, player->getID()); break;
-		case 0xA8: parseEnableSharedPartyExperience(msg); break;
-		case 0xAA: addGameTask(&Game::playerCreatePrivateChannel, player->getID()); break;
-		case 0xAB: parseChannelInvite(msg); break;
-		case 0xAC: parseChannelExclude(msg); break;
-		case 0xBE: addGameTask(&Game::playerCancelAttackAndFollow, player->getID()); break;
-		case 0xC9: /* update tile */ break;
-		case 0xCA: parseUpdateContainer(msg); break;
-		case 0xCB: parseBrowseField(msg); break;
-		case 0xCC: parseSeekInContainer(msg); break;
-		case 0xD2: addGameTask(&Game::playerRequestOutfit, player->getID()); break;
-		case 0xD3: parseSetOutfit(msg); break;
-		case 0xD4: parseToggleMount(msg); break;
-		case 0xDC: parseAddVip(msg); break;
-		case 0xDD: parseRemoveVip(msg); break;
-		case 0xDE: parseEditVip(msg); break;
-		case 0xE6: parseBugReport(msg); break;
-		case 0xE7: /* thank you */ break;
-		case 0xE8: parseDebugAssert(msg); break;
-		case 0xF0: addGameTaskTimed(DISPATCHER_TASK_EXPIRATION, &Game::playerShowQuestLog, player->getID()); break;
-		case 0xF1: parseQuestLine(msg); break;
-		case 0xF2: parseRuleViolationReport(msg); break;
-		case 0xF3: /* get object info */ break;
-		case 0xF4: parseMarketLeave(); break;
-		case 0xF5: parseMarketBrowse(msg); break;
-		case 0xF6: parseMarketCreateOffer(msg); break;
-		case 0xF7: parseMarketCancelOffer(msg); break;
-		case 0xF8: parseMarketAcceptOffer(msg); break;
-		case 0xF9: parseModalWindowAnswer(msg); break;
+	if(player->isAccountManager()) {
+		switch (recvbyte) {
+			case 0x14: g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::logout, getThis(), true, false))); break;
+			case 0x1D: addGameTask(&Game::playerReceivePingBack, player->getID()); break;
+			case 0x1E: addGameTask(&Game::playerReceivePing, player->getID()); break;
+			case 0x96: parseSay(msg); break;
+			case 0x97: addGameTask(&Game::playerRequestChannels, player->getID()); break;
+			case 0xAA: addGameTask(&Game::playerCreatePrivateChannel, player->getID()); break;
 
-		default:
-			// std::cout << "Player: " << player->getName() << " sent an unknown packet header: 0x" << std::hex << static_cast<uint16_t>(recvbyte) << std::dec << "!" << std::endl;
-			break;
+			default:
+				sendCancelWalk();
+				break;
+		}
+	} else {
+		switch (recvbyte) {
+			case 0x14: g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::logout, getThis(), true, false))); break;
+			case 0x1D: addGameTask(&Game::playerReceivePingBack, player->getID()); break;
+			case 0x1E: addGameTask(&Game::playerReceivePing, player->getID()); break;
+			case 0x32: parseExtendedOpcode(msg); break; //otclient extended opcode
+			case 0x64: parseAutoWalk(msg); break;
+			case 0x65: addGameTask(&Game::playerMove, player->getID(), DIRECTION_NORTH); break;
+			case 0x66: addGameTask(&Game::playerMove, player->getID(), DIRECTION_EAST); break;
+			case 0x67: addGameTask(&Game::playerMove, player->getID(), DIRECTION_SOUTH); break;
+			case 0x68: addGameTask(&Game::playerMove, player->getID(), DIRECTION_WEST); break;
+			case 0x69: addGameTask(&Game::playerStopAutoWalk, player->getID()); break;
+			case 0x6A: addGameTask(&Game::playerMove, player->getID(), DIRECTION_NORTHEAST); break;
+			case 0x6B: addGameTask(&Game::playerMove, player->getID(), DIRECTION_SOUTHEAST); break;
+			case 0x6C: addGameTask(&Game::playerMove, player->getID(), DIRECTION_SOUTHWEST); break;
+			case 0x6D: addGameTask(&Game::playerMove, player->getID(), DIRECTION_NORTHWEST); break;
+			case 0x6F: addGameTaskTimed(DISPATCHER_TASK_EXPIRATION, &Game::playerTurn, player->getID(), DIRECTION_NORTH); break;
+			case 0x70: addGameTaskTimed(DISPATCHER_TASK_EXPIRATION, &Game::playerTurn, player->getID(), DIRECTION_EAST); break;
+			case 0x71: addGameTaskTimed(DISPATCHER_TASK_EXPIRATION, &Game::playerTurn, player->getID(), DIRECTION_SOUTH); break;
+			case 0x72: addGameTaskTimed(DISPATCHER_TASK_EXPIRATION, &Game::playerTurn, player->getID(), DIRECTION_WEST); break;
+			case 0x77: parseEquipObject(msg); break;
+			case 0x78: parseThrow(msg); break;
+			case 0x79: parseLookInShop(msg); break;
+			case 0x7A: parsePlayerPurchase(msg); break;
+			case 0x7B: parsePlayerSale(msg); break;
+			case 0x7C: addGameTask(&Game::playerCloseShop, player->getID()); break;
+			case 0x7D: parseRequestTrade(msg); break;
+			case 0x7E: parseLookInTrade(msg); break;
+			case 0x7F: addGameTask(&Game::playerAcceptTrade, player->getID()); break;
+			case 0x80: addGameTask(&Game::playerCloseTrade, player->getID()); break;
+			case 0x82: parseUseItem(msg); break;
+			case 0x83: parseUseItemEx(msg); break;
+			case 0x84: parseUseWithCreature(msg); break;
+			case 0x85: parseRotateItem(msg); break;
+			case 0x87: parseCloseContainer(msg); break;
+			case 0x88: parseUpArrowContainer(msg); break;
+			case 0x89: parseTextWindow(msg); break;
+			case 0x8A: parseHouseWindow(msg); break;
+			case 0x8B: parseWrapItem(msg); break;
+			case 0x8C: parseLookAt(msg); break;
+			case 0x8D: parseLookInBattleList(msg); break;
+			case 0x8E: /* join aggression */ break;
+			case 0x96: parseSay(msg); break;
+			case 0x97: addGameTask(&Game::playerRequestChannels, player->getID()); break;
+			case 0x98: parseOpenChannel(msg); break;
+			case 0x99: parseCloseChannel(msg); break;
+			case 0x9A: parseOpenPrivateChannel(msg); break;
+			case 0x9E: addGameTask(&Game::playerCloseNpcChannel, player->getID()); break;
+			case 0xA0: parseFightModes(msg); break;
+			case 0xA1: parseAttack(msg); break;
+			case 0xA2: parseFollow(msg); break;
+			case 0xA3: parseInviteToParty(msg); break;
+			case 0xA4: parseJoinParty(msg); break;
+			case 0xA5: parseRevokePartyInvite(msg); break;
+			case 0xA6: parsePassPartyLeadership(msg); break;
+			case 0xA7: addGameTask(&Game::playerLeaveParty, player->getID()); break;
+			case 0xA8: parseEnableSharedPartyExperience(msg); break;
+			case 0xAA: addGameTask(&Game::playerCreatePrivateChannel, player->getID()); break;
+			case 0xAB: parseChannelInvite(msg); break;
+			case 0xAC: parseChannelExclude(msg); break;
+			case 0xBE: addGameTask(&Game::playerCancelAttackAndFollow, player->getID()); break;
+			case 0xC9: /* update tile */ break;
+			case 0xCA: parseUpdateContainer(msg); break;
+			case 0xCB: parseBrowseField(msg); break;
+			case 0xCC: parseSeekInContainer(msg); break;
+			case 0xD2: addGameTask(&Game::playerRequestOutfit, player->getID()); break;
+			case 0xD3: parseSetOutfit(msg); break;
+			case 0xD4: parseToggleMount(msg); break;
+			case 0xDC: parseAddVip(msg); break;
+			case 0xDD: parseRemoveVip(msg); break;
+			case 0xDE: parseEditVip(msg); break;
+			case 0xE6: parseBugReport(msg); break;
+			case 0xE7: /* thank you */ break;
+			case 0xE8: parseDebugAssert(msg); break;
+			case 0xF0: addGameTaskTimed(DISPATCHER_TASK_EXPIRATION, &Game::playerShowQuestLog, player->getID()); break;
+			case 0xF1: parseQuestLine(msg); break;
+			case 0xF2: parseRuleViolationReport(msg); break;
+			case 0xF3: /* get object info */ break;
+			case 0xF4: parseMarketLeave(); break;
+			case 0xF5: parseMarketBrowse(msg); break;
+			case 0xF6: parseMarketCreateOffer(msg); break;
+			case 0xF7: parseMarketCancelOffer(msg); break;
+			case 0xF8: parseMarketAcceptOffer(msg); break;
+			case 0xF9: parseModalWindowAnswer(msg); break;
+
+			default:
+				// std::cout << "Player: " << player->getName() << " sent an unknown packet header: 0x" << std::hex << static_cast<uint16_t>(recvbyte) << std::dec << "!" << std::endl;
+				break;
+		}
 	}
 
 	if (msg.isOverrun()) {
