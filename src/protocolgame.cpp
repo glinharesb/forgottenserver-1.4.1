@@ -174,7 +174,18 @@ void ProtocolGame::login(const std::string& name, uint32_t accountId, OperatingS
 			return;
 		}
 
-		if(player->getName() == "Account Manager" && g_config.getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+		/*if(IOBan::isPlayerBanished(player->getGUID(), PLAYERBAN_LOCK) && accountId != 1) {
+			if(g_config.getBoolean(ConfigManager::NAMELOCK_MANAGER)) {
+				player->name = "Account Manager";
+				player->accountManager = MANAGER_NAMELOCK;
+
+				player->managerNumber = accountId;
+				player->managerString2 = name;
+			} else {
+				disconnectClient("Your character has been namelocked.");
+				return;
+			}
+		} else*/ if(player->getName() == "Account Manager" && g_config.getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
 			if(accountId != 1) {
 				player->accountManager = MANAGER_ACCOUNT;
 				player->managerNumber = accountId;

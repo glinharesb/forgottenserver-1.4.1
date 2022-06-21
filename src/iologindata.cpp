@@ -1034,42 +1034,33 @@ bool IOLoginData::playerExists(std::string& name) {
 	return true;
 }
 
-bool IOLoginData::createCharacter(uint32_t accountId, std::string characterName, int32_t vocationId, uint16_t sex) {
-	Database& db = Database::getInstance();
-	std::ostringstream query;
-	query << "SELECT `id` FROM `players` WHERE `name` = " << db.escapeString(characterName) << ";";
-
-	DBResult_ptr result = db.storeQuery(query.str());
-	if (result) {
+bool IOLoginData::createCharacter(uint32_t accountId, std::string characterName, int32_t vocationId, uint16_t sex, uint32_t townId) {
+	if(playerExists(characterName)) {
 		return false;
 	}
 
 	Vocation* vocation = g_vocations.getVocation(vocationId);
 	Vocation* rookVoc = g_vocations.getVocation(0);
-	uint16_t healthMax = 150, manaMax = 0, capMax = 400, lookType = 136;
 
-	if (sex % 2) {
+	Town* town = g_game.map.towns.getTown(townId);
+
+	uint16_t healthMax = 150, manaMax = 0, capMax = 400, lookType = 136;
+	if(sex % 2) {
 		lookType = 128;
 	}
 
-	uint32_t level = g_config.getNumber(ConfigManager::START_LEVEL), tmpLevel = std::min((uint32_t) 7, (level - 1));
-
-	uint32_t posx = 0;
-	uint32_t posy = 0;
-	uint32_t posz = 0;
-	uint32_t town = 1;
-
+	uint32_t level = g_config.getNumber(ConfigManager::START_LEVEL), tmpLevel = std::min((uint32_t)7, (level - 1));
 	uint64_t exp = 0;
-	if (level > 1) {
+	if(level > 1) {
 		exp = Player::getExpForLevel(level);
 	}
 
-	if (tmpLevel > 0) {
+	if(tmpLevel > 0) {
 		healthMax += rookVoc->getHPGain() * tmpLevel;
 		manaMax += rookVoc->getManaGain() * tmpLevel;
 		capMax += rookVoc->getCapGain() * tmpLevel;
 
-		if (level > 8) {
+		if(level > 8) {
 			tmpLevel = level - 8;
 			healthMax += vocation->getHPGain() * tmpLevel;
 			manaMax += vocation->getManaGain() * tmpLevel;
@@ -1077,9 +1068,14 @@ bool IOLoginData::createCharacter(uint32_t accountId, std::string characterName,
 		}
 	}
 
-	query.str("");
+	Database& db = Database::getInstance();
+	std::ostringstream query;
 
-	query << "INSERT INTO `players` (`id`, `name`, `account_id`, `level`, `vocation`, `health`, `healthmax`, `mana`, `manamax`, `conditions`, `cap`) VALUES (NULL, " << db.escapeString(characterName) << ", " << accountId << ", " << level << ", " << vocationId << ", " << healthMax << ", " << healthMax << ", " << manaMax << ", " << manaMax << ", 0x0, " << capMax << ")";
+	query << "INSERT INTO `players` (`id`, `name`, `account_id`, `level`, `vocation`, `health`, `healthmax`, `lookType`, `mana`, `manamax`, `conditions`, `town_id`, `cap`, `sex`) VALUES (NULL, " << db.escapeString(characterName) << ", " << accountId << ", " << level << ", " << vocationId << ", " << healthMax << ", " << healthMax << ", " << lookType << ", " << manaMax << ", " << manaMax << ", 0x0, " << townId << ", " << capMax << ", " << sex << ")";
 
-	return db.executeQuery(query.str());
+	if(!db.executeQuery(query.str())) {
+		return false;
+	}
+
+	return true;
 }

@@ -4639,6 +4639,59 @@ void Player::manageAccount(const std::string &text) {
 
 	bool noSwap = true;
 	switch (accountManager) {
+		case MANAGER_NAMELOCK: {
+			if(!talkState[1]) {
+				managerString = text;
+				trimString(managerString);
+				if(managerString.length() < 4) {
+					msg << "Your name you want is too short, please select a longer name.";
+				} else if(managerString.length() > 20) {
+					msg << "The name you want is too long, please select a shorter name.";
+				} else if(!isValidName(managerString)) {
+					msg << "That name seems to contain invalid symbols, please choose another name.";
+				} else if(IOLoginData::playerExists(managerString)) {
+					msg << "A player with that name already exists, please choose another name.";
+				} else {
+					std::string tmp = asLowerCaseString(managerString);
+					if(tmp.substr(0, 4) != "god " && tmp.substr(0, 3) != "cm " && tmp.substr(0, 3) != "gm ") {
+						talkState[1] = true;
+						talkState[2] = true;
+						msg << managerString << ", are you sure?";
+					} else {
+						msg << "Your character is not a staff member, please tell me another name!";
+					}
+				}
+			}
+			else if(checkText(text, "no") && talkState[2]) {
+				talkState[1] = talkState[2] = false;
+				msg << "What else would you like to name your character?";
+			} else if(checkText(text, "yes") && talkState[2]) {
+				if(!IOLoginData::playerExists(managerString)) {
+					uint32_t tmp;
+					// if(IOLoginData::getInstance()->getGuidByName(tmp, managerString2) &&
+					// 	IOLoginData::getInstance()->changeName(tmp, managerString, managerString2) &&
+					// 	IOBan::getInstance()->removePlayerBanishment(tmp, PLAYERBAN_LOCK)) {
+					// 	if(House* house = Houses::getInstance()->getHouseByPlayerId(tmp)) {
+					// 		house->updateDoorDescription(managerString);
+					// 	}
+
+					// 	talkState[1] = true;
+					// 	talkState[2] = false;
+					// 	msg << "Your character has been successfully renamed, you should now be able to login at it without any problems.";
+					// } else {
+					// 	talkState[1] = talkState[2] = false;
+					// 	msg << "Failed to change your name, please try again.";
+					// }
+				} else {
+					talkState[1] = talkState[2] = false;
+					msg << "A player with that name already exists, please choose another name.";
+				}
+			} else {
+				msg << "Sorry, but I can't understand you, please try to repeat that!";
+			}
+
+			break;
+		}
 		case MANAGER_ACCOUNT: {
 			Account account = IOLoginData::loadAccount(managerNumber);
 			if(checkText(text, "cancel") || (checkText(text, "account") && !talkState[1])) {
@@ -4652,6 +4705,84 @@ void Player::manageAccount(const std::string &text) {
 				talkState[1] = false;
 				talkState[2] = true;
 				msg << "Which character would you like to delete?";
+			} else if(checkText(text, "delete") && talkState[1]) {
+				talkState[1] = false;
+				talkState[2] = true;
+				msg << "Which character would you like to delete?";
+			} else if(talkState[2]) {
+				std::string tmp = text;
+				trimString(tmp);
+				if(!isValidName(tmp, false)) {
+					msg << "That name contains invalid characters, try to say your name again, you might have typed it wrong.";
+				} else {
+					talkState[2] = false;
+					talkState[3] = true;
+					managerString = tmp;
+					msg << "Do you really want to delete the character named " << managerString << "?";
+				}
+			} else if(checkText(text, "yes") && talkState[3]) {
+				// switch(IOLoginData::deleteCharacter(managerNumber, managerString)) {
+				// 	case DELETE_INTERNAL:
+				// 		msg << "An error occured while deleting your character. Either the character does not belong to you or it doesn't exist.";
+				// 		break;
+
+				// 	case DELETE_SUCCESS:
+				// 		msg << "Your character has been deleted.";
+				// 		break;
+
+				// 	case DELETE_HOUSE:
+				// 		msg << "Your character owns a house. To make sure you really want to lose your house by deleting your character, you have to login and leave the house or pass it to someone else first.";
+				// 		break;
+
+				// 	case DELETE_LEADER:
+				// 		msg << "Your character is the leader of a guild. You need to disband or pass the leadership someone else to delete your character.";
+				// 		break;
+
+				// 	case DELETE_ONLINE:
+				// 		msg << "A character with that name is currently online, to delete a character it has to be offline.";
+				// 		break;
+				// }
+
+				talkState[1] = true;
+				for(int8_t i = 2; i <= 12; i++) {
+					talkState[i] = false;
+				}
+			} else if(checkText(text, "no") && talkState[3]) {
+				talkState[1] = true;
+				talkState[3] = false;
+				msg << "Tell me what character you want to delete.";
+			} else if(checkText(text, "password") && talkState[1]) {
+				talkState[1] = false;
+				talkState[4] = true;
+				msg << "Tell me your new password please.";
+			} else if(talkState[4]) {
+				std::string tmp = text;
+				trimString(tmp);
+				if(tmp.length() < 6) {
+					msg << "That password is too short, at least 6 digits are required. Please select a longer password.";
+				} else if(!isValidPassword(tmp)) {
+					msg << "Your password contains invalid characters... please tell me another one.";
+				} else {
+					talkState[4] = false;
+					talkState[5] = true;
+					managerString = tmp;
+					msg << "Should '" << managerString << "' be your new password?";
+				}
+			} else if(checkText(text, "yes") && talkState[5]) {
+				talkState[1] = true;
+				for(int8_t i = 2; i <= 12; i++) {
+					talkState[i] = false;
+				}
+
+				// IOLoginData::getInstance()->setPassword(managerNumber, managerString);
+				msg << "Your password has been changed.";
+			} else if(checkText(text, "no") && talkState[5]) {
+				talkState[1] = true;
+				for(int8_t i = 2; i <= 12; i++) {
+					talkState[i] = false;
+				}
+
+				msg << "Then not.";
 			} else if(checkText(text, "character") && talkState[1]) {
 				if(account.characters.size() <= 15) {
 					talkState[1] = false;
@@ -4753,7 +4884,7 @@ void Player::manageAccount(const std::string &text) {
 						talkState[i] = false;
 					}
 
-					if(IOLoginData::createCharacter(managerNumber, managerString, managerNumber2, (uint16_t)managerSex)) {
+					if(IOLoginData::createCharacter(managerNumber, managerString, managerNumber2, (uint16_t)managerSex, managerNumber3)) {
 						msg << "Your character has been created.";
 					} else {
 						msg << "Your character couldn't be created, please try again.";
@@ -4803,7 +4934,7 @@ void Player::manageAccount(const std::string &text) {
 						talkState[i] = false;
 					}
 
-					if(IOLoginData::createCharacter(managerNumber, managerString, managerNumber2, (uint16_t)managerSex)) {
+					if(IOLoginData::createCharacter(managerNumber, managerString, managerNumber2, (uint16_t)managerSex, managerNumber3)) {
 						msg << "Your character has been created.";
 					} else {
 						msg << "Your character couldn't be created, please try again.";
@@ -4839,7 +4970,7 @@ void Player::manageAccount(const std::string &text) {
 						talkState[i] = false;
 					}
 
-					if(IOLoginData::createCharacter(managerNumber, managerString, managerNumber2, (uint16_t)managerSex)) {
+					if(IOLoginData::createCharacter(managerNumber, managerString, managerNumber2, (uint16_t)managerSex, managerNumber3)) {
 						msg << "Your character has been created.";
 					} else {
 						msg << "Your character couldn't be created, please try again.";
@@ -4853,6 +4984,30 @@ void Player::manageAccount(const std::string &text) {
 				talkState[13] = true;
 				talkState[14] = false;
 				msg << "So where do you want to live?";
+			} else if(checkText(text, "recovery key") && talkState[1]) {
+				talkState[1] = false;
+				talkState[10] = true;
+				msg << "Would you like a recovery key?";
+			} else if(checkText(text, "yes") && talkState[10]) {
+				// if(account.recoveryKey != "0") {
+				// 	msg << "Sorry, you already have a recovery key, for security reasons I may not give you a new one.";
+				// } else {
+				// 	managerString = generateRecoveryKey(4, 4);
+				// 	IOLoginData::getInstance()->setRecoveryKey(managerNumber, managerString);
+				// 	msg << "Your recovery key is: " << managerString << ".";
+				// }
+
+				talkState[1] = true;
+				for(int8_t i = 2; i <= 12; i++) {
+					talkState[i] = false;
+				}
+			} else if(checkText(text, "no") && talkState[10]) {
+				msg << "Then not.";
+				talkState[1] = true;
+
+				for(int8_t i = 2; i <= 12; i++) {
+					talkState[i] = false;
+				}
 			} else {
 				msg << "Please read the latest message that I have specified, I don't understand the current requested action.";
 			}
@@ -4966,7 +5121,17 @@ void Player::manageAccount(const std::string &text) {
 					msg << "Sorry, but account with such name doesn't exists.";
 					talkState[6] = talkState[7] = false;
 				}
-			// falta o step 8 aqui
+			} else if(talkState[8]) {
+				managerString2 = text;
+				// if(IOLoginData::getInstance()->validRecoveryKey(managerNumber, managerString2) && managerString2 != "0") {
+				// 	sprintf(managerChar, "%s%d", g_config.getString(ConfigManager::SERVER_NAME).c_str(), random_range(100, 999));
+				// 	IOLoginData::getInstance()->setPassword(managerNumber, managerChar);
+				// 	msg << "Correct! Your new password is: " << managerChar << ".";
+				// } else {
+				// 	msg << "Sorry, but this key doesn't match to account you gave me.";
+				// }
+
+				talkState[7] = talkState[8] = false;
 			} else {
 				msg << "Sorry, but I can't understand you, please try to repeat that.";
 			}
